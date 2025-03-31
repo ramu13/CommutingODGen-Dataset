@@ -8,25 +8,27 @@ import torch
 
 from pprint import pprint
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device: ", device)
 
 print("\n  **Loading data...")
 xtrain, ytrain, xvalid, yvalid, xtest, ytest = load_data()
 
 gravity = GRAVITY()
-gravity = gravity.cuda()
+gravity = gravity.to(device)
 
 print('\n  **Start fitting...')
 start = time.time()
 
-xtrain = torch.FloatTensor(xtrain).cuda()
-ytrain = torch.FloatTensor(ytrain).cuda()
+xtrain = torch.FloatTensor(xtrain).to(device)
+ytrain = torch.FloatTensor(ytrain).to(device)
 
 optimizer = torch.optim.Adam(gravity.parameters(), lr=1e-4)
 
 
 best_valid_loss = np.inf
 valid_flag = 100
-for i in range(10000):
+for i in range(100000):
     print(f"Epoch {i+1}:", end=" | ")
     gravity.train()
 
@@ -41,8 +43,8 @@ for i in range(10000):
 
     valid_losses = []
     for xvalid_one, yvalid_one in zip(xvalid, yvalid):
-        xvalid_one = torch.FloatTensor(xvalid_one).cuda()
-        yvalid_one = torch.FloatTensor(yvalid_one).cuda()
+        xvalid_one = torch.FloatTensor(xvalid_one).to(device)
+        yvalid_one = torch.FloatTensor(yvalid_one).to(device)
         gravity.eval()
         yhat = gravity(xvalid_one).squeeze()
         yhat = yhat.cpu().detach().numpy()
@@ -66,7 +68,7 @@ print("-"*50)
 print("\n  **Evaluating...")
 metrics_all = []
 for x_one, y_one in zip(xtest, ytest):
-    x_one = torch.FloatTensor(x_one).cuda()
+    x_one = torch.FloatTensor(x_one).to(device)
     gravity.eval()
     y_one_hat = gravity(x_one).squeeze()
     y_one_hat = y_one_hat.cpu().detach().numpy()
