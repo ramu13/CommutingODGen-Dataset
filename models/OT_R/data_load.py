@@ -70,6 +70,7 @@ def construct_validtest(areas):
 
 def load_data(if_shuffle=True):
     areas = load_all_areas(if_shuffle)
+    areas = areas[:20]  # For debugging, limit to 20 areas
     train_areas, valid_areas, test_areas = split_train_valid_test(areas, train_ratio=0.1)
     
     x_train, y_train = construct_train(train_areas)
