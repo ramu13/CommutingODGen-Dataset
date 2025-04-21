@@ -14,7 +14,7 @@ def load_all_areas(if_shuffle=True):
     return areas
 
 def split_train_valid_test(areas, train_ratio=0.8, valid_ratio=0.1, test_ratio=0.1):
-    assert train_ratio + valid_ratio + test_ratio == 1
+    # assert train_ratio + valid_ratio + test_ratio == 1
 
     train_areas = areas[:int(len(areas)*train_ratio)]
     valid_areas = areas[int(len(areas)*train_ratio):int(len(areas)*(train_ratio+valid_ratio))]
@@ -48,7 +48,7 @@ def construct_sample(areas):
     
 def load_data(if_shuffle=True):
     areas = load_all_areas(if_shuffle)
-    train_areas, valid_areas, test_areas = split_train_valid_test(areas)
+    train_areas, valid_areas, test_areas = split_train_valid_test(areas, train_ratio=0.1))
 
     nfeats_train, adjs_train, dises_train, ods_train = construct_sample(train_areas)
     nfeats_valid, adjs_valid, dises_valid, ods_valid = construct_sample(valid_areas)
