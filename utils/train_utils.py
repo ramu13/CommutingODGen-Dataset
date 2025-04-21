@@ -95,7 +95,12 @@ def epoch_pass(model, loader, optimizer=None, device='cuda'):
         for batch in loop:
             x, tgt, ori = flat_batch(batch, device)
             pred = model(x, ori)  # pred: (N,), tgt: (N,)
-            loss = F.kl_div(pred.log(), tgt, reduction='batchmean')
+
+            if torch.isnan(tgt).any() or (tgt < 0).any():
+                print("ERROR tgt contains NaN or negative values!")
+
+            eps = 1e-8
+            loss = F.kl_div((pred + eps).log(), tgt, reduction='batchmean')
 
             if optimizer:
                 optimizer.zero_grad()

@@ -29,7 +29,7 @@ valid_loader = DataLoader(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 input_dim = train_loader.dataset[0]["x"].shape[-1]   # 2F+1
 model = DeepGravity(input_dim).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
 
 num_epochs = 10
