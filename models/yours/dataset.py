@@ -47,26 +47,3 @@ class CommutingODDataset(Dataset):
         x = self._make_feature_tensor(demos, pois, dis)        # (N, N, C)
         y = torch.from_numpy(od).float()                       # (N, N)
         return {"x": x, "y": y, "area": area}
-
-def pad_collate(batch):
-    """
-    各 area の N が異なるため、最大 N にゼロパディングし
-    (B, N_max, N_max, C) / (B, N_max, N_max) へ揃える。
-    """
-    xs  = [item["x"] for item in batch]
-    ys  = [item["y"] for item in batch]
-    areas = [item["area"] for item in batch]
-
-    # 4-D Tensor へパディング
-    C = xs[0].shape[-1]
-    N_max = max(x.shape[0] for x in xs)
-    x_pad = torch.zeros(len(xs), N_max, N_max, C)
-    y_pad = torch.zeros(len(ys), N_max, N_max)
-
-    for i, (x, y) in enumerate(zip(xs, ys)):
-        n = x.shape[0]
-        x_pad[i, :n, :n, :] = x
-        y_pad[i, :n, :n]    = y
-
-    mask = (y_pad.sum(-1) != 0).float()   # (B, N_max) ― 損失計算用マスクなどに利用
-    return {"x": x_pad, "y": y_pad, "mask": mask, "areas": areas}
