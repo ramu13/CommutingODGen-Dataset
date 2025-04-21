@@ -34,5 +34,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 num_epochs = 10
 for epoch in range(num_epochs):
+    print(f"Epoch {epoch+1}/{num_epochs}")
     train_loss = epoch_pass(model, train_loader, optimizer, device)
+    print(f"  Train Loss: {train_loss:.6f}")
     valid_loss = epoch_pass(model, valid_loader, None, device)
+    print(f"  Valid Loss: {valid_loss:.6f}")

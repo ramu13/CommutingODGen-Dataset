@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 
 def flat_batch(batch, device):
     """
@@ -88,10 +89,12 @@ def epoch_pass(model, loader, optimizer=None, device='cuda'):
     model.train() if optimizer else model.eval()
     total_loss, total_count = 0.0, 0
 
+    loop = tqdm(loader, desc="Train" if optimizer else "Valid", leave=False)
+
     with torch.set_grad_enabled(optimizer is not None):
-        for batch in loader:
+        for batch in loop:
             x, tgt, ori = flat_batch(batch, device)
-            pred = model(x, ori)
+            pred = model(x, ori)  # pred: (N,), tgt: (N,)
             loss = F.kl_div(pred.log(), tgt, reduction='batchmean')
 
             if optimizer:
@@ -99,7 +102,10 @@ def epoch_pass(model, loader, optimizer=None, device='cuda'):
                 loss.backward()
                 optimizer.step()
 
-            total_loss += loss.item() * tgt.size(0)
+            batch_loss = loss.item()
+            total_loss += batch_loss * tgt.size(0)
             total_count += tgt.size(0)
+
+            loop.set_postfix(loss=batch_loss)
 
     return total_loss / total_count
