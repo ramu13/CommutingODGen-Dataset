@@ -134,3 +134,20 @@ class DeepGravity(nn.Module):
         denom.scatter_add_(0, origin_ids, logits_exp)
 
         return logits_exp / denom[origin_ids]        # (M,)
+    
+
+class DeepGravityReg(nn.Module):
+    def __init__(self, input_dim, hidden_dims=[64, 64]):
+        super().__init__()
+        layers = []
+        dims = [input_dim] + hidden_dims
+        for in_dim, out_dim in zip(dims[:-1], dims[1:]):
+            layers.append(nn.Linear(in_dim, out_dim))
+            layers.append(nn.ReLU())
+        self.feature_extractor = nn.Sequential(*layers)
+        self.output_layer = nn.Linear(hidden_dims[-1], 1)
+
+    def forward(self, x):
+        features = self.feature_extractor(x)
+        flow_pred = self.output_layer(features).squeeze(-1)  # shape: (N,)
+        return flow_pred  # ← softmax なし

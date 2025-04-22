@@ -7,8 +7,7 @@ from torch.utils.data import DataLoader
 from models.yours.data_load import load_all_areas, split_train_valid_test
 from models.yours.dataset import CommutingODDataset
 from models.yours.model import DeepGravity
-from utils.train_utils import epoch_pass, pad_collate
-
+from models.yours.utils.train_utils import epoch_pass, pad_collate
 
 
 # ---------- 1. Data ----------
