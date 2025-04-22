@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
+
 def flat_batch(batch, device):
     """
     pad_collate が返す 4‑D/2‑D テンソルを「有効セルだけの 2‑D 行列」に畳む。
@@ -83,6 +84,31 @@ def pad_collate(batch):
 
     mask = (y_pad.sum(-1) != 0).float()   # (B, N_max) ― 損失計算用マスクなどに利用
     return {"x": x_pad, "y": y_pad, "mask": mask, "areas": areas}
+
+
+def pad_collate_for_reg(batch):
+    """
+    回帰用: 各 area の x: (N,N,C), y: (N,N) を flatten し、(M,C), (M,) にまとめて返す
+    """
+    x_list, y_list = [], []
+
+    for item in batch:
+        x = item["x"]  # shape: (N, N, C)
+        y = item["y"]  # shape: (N, N)
+
+        N = x.shape[0]
+        x = x.reshape(-1, x.shape[-1])  # (N*N, C)
+        y = y.reshape(-1)               # (N*N,)
+
+        # 0フローは除く（optional）
+        mask = y > 0
+        x_list.append(x[mask])
+        y_list.append(y[mask])
+
+    return {
+        "x": torch.cat(x_list, dim=0),   # (M, C)
+        "y": torch.cat(y_list, dim=0)    # (M,)
+    }
 
 
 def epoch_pass(model, loader, optimizer=None, device='cuda'):
