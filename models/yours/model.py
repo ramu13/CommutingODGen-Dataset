@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class RIOT(nn.Module):
     def __init__(self, pdim, qdim, lambda_=1.0, lambda_u=1.0, lambda_v=1.0, n_iter=100):
         """
@@ -77,7 +76,6 @@ class RIOT(nn.Module):
 
         return π
 
-
 class DeepGravityEasy(nn.Module):
     def __init__(self, input_dim, hidden_dims=[64, 64]):
         super(DeepGravity, self).__init__()
@@ -105,16 +103,15 @@ class DeepGravityEasy(nn.Module):
 
         return output  # predicted P(j|i)
 
-
 class DeepGravity(nn.Module):
     def __init__(self, input_dim, hidden_dims=(64, 64)):
         super().__init__()
         layers = []
         dims = [input_dim] + list(hidden_dims)
-        for d_in, d_out in zip(dims[:-1], dims[1:]):
-            layers += [nn.Linear(d_in, d_out), nn.ReLU()]
+        for d_in, d_out in zip(dims[:-1], dims[1:]): 
+            layers += [nn.Linear(d_in, d_out), nn.ReLU()] 
         self.feature_extractor = nn.Sequential(*layers)
-        self.output_layer      = nn.Linear(hidden_dims[-1], 1)
+        self.output_layer = nn.Linear(hidden_dims[-1], 1)
 
     def forward(self, x, origin_ids):
         """
@@ -151,3 +148,35 @@ class DeepGravityReg(nn.Module):
         features = self.feature_extractor(x)
         flow_pred = self.output_layer(features).squeeze(-1)  # shape: (N,)
         return flow_pred  # ← softmax なし
+
+
+class GRAVITY_P(nn.Module):
+    def __init__(self, input_dim=3):
+        assert input_dim == 3, "input_dim must be 3"
+        super(GRAVITY_P, self).__init__()
+        self.alpha = nn.Parameter(torch.tensor(0.5))
+        self.beta = nn.Parameter(torch.tensor(0.5))
+        self.gamma = nn.Parameter(torch.tensor(0.5))
+        self.G = nn.Parameter(torch.tensor([torch.randn(1)]))
+
+    def forward(self, x):
+        x = x + 1e-10 # avoid log(0)
+        logy = self.alpha * torch.log(x[:, 0]) + self.beta * torch.log(x[:, 1]) - self.gamma * torch.log(x[:, 2])
+        y = self.G * torch.exp(logy)
+        return y
+
+
+class GRAVITY_E(nn.Module):
+    def __init__(self, input_dim=3):
+        assert input_dim == 3, "input_dim must be 3"
+        super(GRAVITY_E, self).__init__()
+        self.alpha = nn.Parameter(torch.tensor(0.5))
+        self.beta = nn.Parameter(torch.tensor(0.5))
+        self.gamma = nn.Parameter(torch.tensor(0.5))
+        self.G = nn.Parameter(torch.tensor([torch.randn(1)]))
+
+    def forward(self, x):
+        x = x + 1e-10 # avoid log(0)
+        logy = self.alpha * torch.log(x[:, 0]) + self.beta * torch.log(x[:, 1]) - self.gamma * x[:, 2]
+        y = self.G * torch.exp(logy)
+        return y

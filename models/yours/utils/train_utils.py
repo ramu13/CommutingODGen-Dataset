@@ -1,4 +1,7 @@
 # utils/train_utils.py
+"""
+    サイズの異なるグラフを入力データとして扱う用
+"""
 
 import torch
 import torch.nn.functional as F
