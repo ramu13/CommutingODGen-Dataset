@@ -1,89 +1,75 @@
-"""
-FGW で 10 グラフを相互比較して近いグラフを出力するスクリプト
---------------------------------------------------------------
-- データ取得         : CommutingODDataset から最初の 10 件
-- コスト行列作成     : ノード特徴 (L2) / 構造コスト (1‑adjacency)
-- FGW 距離計算       : ot.gromov.fused_gromov_wasserstein2
-"""
-
-import numpy as np
-import torch
-from torch.utils.data import DataLoader
-import ot
+import os, pathlib, numpy as np, torch, ot
+from tqdm import tqdm
 from models.yours.dataset import CommutingODDataset
-from models.yours.utils.load_utils import load_all_areas, split_train_valid_test
 
-# ---------------------------------------------------------------------
-# 0. 設定
-K_GRAPHS   = 10             # 比較対象のグラフ数
-ALPHA      = 0.5            # 構造 : 特徴 の重み（0〜1）
-ROOT_DIR   = "data"
+# ---------- 設定 ----------
+DATA_DIR = "data"                    # area フォルダが置かれている場所
+ALPHA    = 0.5                       # FGW の α
+IDS_BIN  = "fgw_area_ids.npy"        # 行列順の area_id を保存
+DIST_BIN = "fgw_dist.dat"            # 距離行列 (memmap)
+DTYPE    = np.float32
 
-# ---------------------------------------------------------------------
-# 1. データ読み込み（最初の K_GRAPHS だけ）
-areas_all = load_all_areas()
-train_areas, _, _ = split_train_valid_test(areas_all)
+# ---------- 1. area_id を固定順で列挙 ----------
+area_ids = sorted(os.listdir(DATA_DIR))[:30]  
+np.save(IDS_BIN, np.array(area_ids))              # ★ 順序をファイル保存
 
-loader = DataLoader(
-    CommutingODDataset(ROOT_DIR, train_areas),
-    batch_size=1, shuffle=True, num_workers=0
-)
+# ---------- 2. Dataset 準備（シャッフルなし） ----------
+dataset = CommutingODDataset(DATA_DIR, area_ids)  # データは都度ロード
+N = len(dataset)
 
-graphs, area_ids = [], []
-for batch in loader:
-    graphs.append(batch["x"].squeeze(0).cpu())   # (C,N,F) or (N,F)
-    area_ids.append(batch["area"][0])
-    if len(graphs) >= K_GRAPHS:                  # 10 件そろったら抜ける
-        break
+# ---------- 3. 距離行列ファイルを確保 ----------
+D = np.memmap(DIST_BIN, mode="w+", dtype=DTYPE, shape=(N, N))
+D[:] = 0.0                                        # 対角 0
 
-print("Loaded areas:", area_ids)
+# ---------- 4. dis.npy へのパス関数 ----------
+def dis_path(aid: str):
+    return os.path.join(DATA_DIR, aid, "dis.npy")  # (N,N) の距離行列
 
-# ---------------------------------------------------------------------
-# 2. FGW 用ユーティリティ
-def split_feats_adj(x: torch.Tensor):
-    """Dataset テンソル → (features, adjacency or None)"""
-    if x.ndim == 3:               # (C,N,F) を想定
-        feats, adj = x[0], x[1]
-    else:                         # (N,F)
-        feats, adj = x, None
-    return feats.numpy(), (adj.numpy() if adj is not None else None)
+# ---------- 5. Node attribute 抽出 (距離チャネルを除く) ----------
+def node_features(x_tensor: torch.Tensor):
+    """
+    x : (N, N, 2F+1)
+    -> ノードごとの特徴行列 (N, F_attr)
+       ・最後の距離チャネルは捨てる
+       ・出発ノード側の特徴だけを抽出
+    """
+    twoFplus1 = x_tensor.shape[-1]
+    F = (twoFplus1 - 1) // 2                     # 元の 1 ノードあたりの次元
 
-def feature_cost(f1, f2):
-    diff = f1[:, None, :] - f2[None, :, :]
-    return np.linalg.norm(diff, axis=-1)         # (n1,n2)
+    # 出発ノード i の特徴は 行方向に一定なので j=0 列を取ればよい
+    return x_tensor[:, 0, :F].numpy()            # (N, F)
 
-def structure_cost(adj, N):
-    if adj is not None and adj.ndim == 2 and adj.shape[0] == adj.shape[1]:
-        return 1.0 - adj                         # (N,N)
-    return np.ones((N, N))                       # 構造情報なし
+# ---------- 6. FGW 距離関数 ----------
+def fgw_dist(sample_i, sample_j, alpha=ALPHA):
+    x1, aid1 = sample_i["x"], sample_i["area"]
+    x2, aid2 = sample_j["x"], sample_j["area"]
 
-def fgw_distance(x1, x2, alpha=ALPHA):
-    f1, adj1 = split_feats_adj(x1)
-    f2, adj2 = split_feats_adj(x2)
+    f1 = node_features(x1)
+    f2 = node_features(x2)
 
-    M  = feature_cost(f1, f2)
-    C1 = structure_cost(adj1, f1.shape[0])
-    C2 = structure_cost(adj2, f2.shape[0])
-    p  = np.full(f1.shape[0], 1.0 / f1.shape[0])
-    q  = np.full(f2.shape[0], 1.0 / f2.shape[0])
+    C1 = np.load(dis_path(aid1)).astype(np.float32)
+    C2 = np.load(dis_path(aid2)).astype(np.float32)
+    C1 /= C1.max() or 1.0
+    C2 /= C2.max() or 1.0
+
+    M  = np.linalg.norm(f1[:, None] - f2[None, :], axis=-1)
+
+    p = np.full(f1.shape[0], 1 / f1.shape[0])
+    q = np.full(f2.shape[0], 1 / f2.shape[0])
 
     return ot.gromov.fused_gromov_wasserstein2(
         M, C1, C2, p=p, q=q,
-        loss_fun="square_loss",
-        alpha=alpha,
-        symmetric=True
+        loss_fun="square_loss", alpha=alpha, symmetric=True
     )
 
-# ---------------------------------------------------------------------
-# 3. 距離行列の作成
-n = len(graphs)
-D = np.zeros((n, n))
-for i in range(n):
-    for j in range(i + 1, n):
-        D[i, j] = D[j, i] = fgw_distance(graphs[i], graphs[j])
+# ---------- 7. 距離行列を逐次計算（常に 2 サンプルしかメモリに載らない） ----------
+for i in tqdm(range(N), desc="FGW rows"):
+    samp_i = dataset[i]
+    for j in range(i + 1, N):
+        samp_j = dataset[j]
+        D[i, j] = D[j, i] = fgw_dist(samp_i, samp_j)
 
-# ---------------------------------------------------------------------
-# 4. 近傍グラフを表示
-for i, aid in enumerate(area_ids):
-    nearest = np.argsort(D[i])[1:4]              # 自分を除いた上位 3 件
-    print(f"{aid} → {[area_ids[j] for j in nearest]}  dist={D[i, nearest]}")
+D.flush()
+print(f"distance matrix  : {DIST_BIN}")
+print(f"area id sequence : {IDS_BIN}")
+print("FGW distance matrix saved.")
