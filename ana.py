@@ -49,6 +49,7 @@ for epoch in range(num_epochs):
 
         # 損失計算（回帰）
         loss = F.mse_loss(y_pred, y_true)
+        print(f"  Train Loss: {loss.item():.6f}")
 
         # バックプロパゲーション
         optimizer.zero_grad()

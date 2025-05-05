@@ -2,7 +2,6 @@ import os
 import random
 import numpy as np
 
-
 def load_all_areas(if_shuffle=True):
     """
     Load all areas from the data directory.
